@@ -29,9 +29,21 @@ func main() {
 		fmt.Println("is ErrorInfraNotFound") // go to this section
 	}
 
+	if err := errorwrap.Wrapper(err, ErrorInfraNotFound); err != nil {
+		fmt.Printf("%+v\n", err)
+		fmt.Println("Print file stack trace")
+		fmt.Printf("%s\n", err.StackTrace())
+		fmt.Println("Print file+line stack trace")
+		fmt.Printf("%v\n", err.StackTrace())
+		fmt.Println("Print function+file+line stack trace")
+		fmt.Printf("%+v\n", err.StackTrace())
+	}
+
 	fmt.Println(errorwrap.Is(err, ErrorDomain)) // true
 
 	fmt.Println(errorwrap.Is(err, ErrorUseCase)) // true
+
+	fmt.Printf("%+v\n", errorwrap.Wrapper(err, ErrorDomain).StackTrace()) // print stack trace until domain layer only
 }
 
 func infraLayer(intType int) error {
@@ -49,7 +61,7 @@ func infraLayer(intType int) error {
 	case 3:
 		err := errors.New("another error")
 		if err != nil {
-			return errorwrap.WrapString(err, "using wrapper message")
+			return errorwrap.NewErrorWithMessage(err, "using wrapper message")
 		}
 	case 4:
 		err := errors.New("error again")

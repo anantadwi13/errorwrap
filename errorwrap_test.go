@@ -23,9 +23,9 @@ func infraLayer(intType ...int) error {
 	}
 	switch it {
 	case 1:
-		return WrapString(ErrorRootCause, "database not found")
+		return NewErrorWithMessage(ErrorRootCause, "database not found")
 	case 2:
-		return WrapString(ErrorInfra, "redis not found")
+		return NewErrorWithMessage(ErrorInfra, "redis not found")
 	default:
 		return Wrap(ErrorRootCause, ErrorInfra)
 	}
