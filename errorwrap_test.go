@@ -1,38 +1,49 @@
 package errorwrap
 
 import (
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"strings"
 	"testing"
 )
 
 var (
-	ErrorRootCause = errors.New("error root cause")
-	ErrorInfra     = errors.New("error infra layer")
-	ErrorDomain    = errors.New("error domain layer")
-	ErrorUseCase   = errors.New("error usecase layer")
-	ErrorApp       = errors.New("error app layer")
+	ErrorCommonNotFound = New("error not found")
+
+	ErrorMysqlDb = errors.New("error database mysql")
+	ErrorRedisDb = New("error database redis")
+
+	ErrorInfraDatabase = New("error infra layer")
+	ErrorDomain        = New("error domain layer")
+	ErrorUseCase       = New("error usecase layer")
+	ErrorApp           = New("error app layer")
+
+	ErrorTestA = New("error test a")
+	ErrorTestB = errors.New("error test b")
 )
 
-func infraLayer(intType ...int) error {
+const (
+	MYSQL = iota + 1
+	REDIS
+)
+
+func infraDbLayer(intType ...int) error {
 	it := 0
 	if len(intType) > 0 {
 		it = intType[0]
 	}
 	switch it {
-	case 1:
-		return NewErrorWithMessage(ErrorRootCause, "database not found")
-	case 2:
-		return NewErrorWithMessage(ErrorInfra, "redis not found")
+	case MYSQL:
+		return NewError(ErrorInfraDatabase, ErrorCommonNotFound, ErrorMysqlDb)
+	case REDIS:
+		return NewErrorWithMessage("redis not found", ErrorInfraDatabase, ErrorCommonNotFound, ErrorRedisDb)
 	default:
-		return Wrap(ErrorRootCause, ErrorInfra)
+		return NewError(ErrorInfraDatabase)
 	}
 }
 
 func domainLayer(intType ...int) error {
-	err := infraLayer(intType...)
+	err := infraDbLayer(intType...)
 	if err != nil {
 		return Wrap(err, ErrorDomain)
 	}
@@ -70,10 +81,6 @@ func TestNew(t *testing.T) {
 			got := New(tt.args.message)
 			assert.NotNil(t, got)
 			assert.Equal(t, tt.args.message, got.Error())
-			stackTrace := fmt.Sprintf("%+v", got)
-			assert.NotEmpty(t, stackTrace)
-			stackTrace = strings.Replace(stackTrace, tt.args.message+"\n", "", 1)
-			assert.NotEmpty(t, stackTrace)
 		})
 	}
 }
@@ -89,15 +96,15 @@ func TestErrorIs(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "success ABC->A",
+			name: "success usecaseLayer->ErrorInfraDatabase",
 			args: args{
 				wrapper: usecaseLayer(),
-				target:  ErrorInfra,
+				target:  ErrorInfraDatabase,
 			},
 			want: true,
 		},
 		{
-			name: "success ABC->B",
+			name: "success usecaseLayer->ErrorDomain",
 			args: args{
 				wrapper: usecaseLayer(),
 				target:  ErrorDomain,
@@ -105,7 +112,7 @@ func TestErrorIs(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "success ABC->C",
+			name: "success usecaseLayer->ErrorUseCase",
 			args: args{
 				wrapper: usecaseLayer(),
 				target:  ErrorUseCase,
@@ -113,7 +120,7 @@ func TestErrorIs(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "error ABC->D",
+			name: "error usecaseLayer->ErrorApp",
 			args: args{
 				wrapper: usecaseLayer(),
 				target:  ErrorApp,
@@ -121,15 +128,15 @@ func TestErrorIs(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "success AB->A",
+			name: "success domainLayer->ErrorInfraDatabase",
 			args: args{
 				wrapper: domainLayer(),
-				target:  ErrorInfra,
+				target:  ErrorInfraDatabase,
 			},
 			want: true,
 		},
 		{
-			name: "success AB->B",
+			name: "success domainLayer->ErrorDomain",
 			args: args{
 				wrapper: domainLayer(),
 				target:  ErrorDomain,
@@ -137,7 +144,7 @@ func TestErrorIs(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "error AB->C",
+			name: "error domainLayer->ErrorUseCase",
 			args: args{
 				wrapper: domainLayer(),
 				target:  ErrorUseCase,
@@ -145,7 +152,7 @@ func TestErrorIs(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "error AB->D",
+			name: "error domainLayer->ErrorApp",
 			args: args{
 				wrapper: domainLayer(),
 				target:  ErrorApp,
@@ -153,23 +160,23 @@ func TestErrorIs(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "error A->AB",
+			name: "error ErrorInfraDatabase->domainLayer",
 			args: args{
-				wrapper: ErrorInfra,
+				wrapper: ErrorInfraDatabase,
 				target:  domainLayer(),
 			},
 			want: false,
 		},
 		{
-			name: "success ABCD->A",
+			name: "success appLayer->ErrorInfraDatabase",
 			args: args{
 				wrapper: appLayer(),
-				target:  ErrorInfra,
+				target:  ErrorInfraDatabase,
 			},
 			want: true,
 		},
 		{
-			name: "success ABCD->B",
+			name: "success appLayer->ErrorDomain",
 			args: args{
 				wrapper: appLayer(),
 				target:  ErrorDomain,
@@ -177,7 +184,7 @@ func TestErrorIs(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "success ABCD->C",
+			name: "success appLayer->ErrorUseCase",
 			args: args{
 				wrapper: appLayer(),
 				target:  ErrorUseCase,
@@ -185,12 +192,28 @@ func TestErrorIs(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "success ABCD->D",
+			name: "success appLayer->ErrorApp",
 			args: args{
 				wrapper: appLayer(),
 				target:  ErrorApp,
 			},
 			want: true,
+		},
+		{
+			name: "success appLayer->ErrorRedisDb",
+			args: args{
+				wrapper: appLayer(REDIS),
+				target:  ErrorRedisDb,
+			},
+			want: true,
+		},
+		{
+			name: "error appLayer->ErrorRedisDb",
+			args: args{
+				wrapper: appLayer(MYSQL),
+				target:  ErrorRedisDb,
+			},
+			want: false,
 		},
 	}
 	for _, tt := range tests {
@@ -213,17 +236,17 @@ func TestWrapper(t *testing.T) {
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
-			name: "get ErrorInfra from appLayer",
+			name: "get ErrorInfraDatabase from appLayer",
 			args: args{
 				err:    appLayer(),
-				target: ErrorInfra,
+				target: ErrorInfraDatabase,
 			},
 			wantErr: assert.Error,
 		},
 		{
-			name: "invalid get ErrorInfra from appLayer",
+			name: "invalid get ErrorInfraDatabase from appLayer",
 			args: args{
-				err:    ErrorInfra,
+				err:    ErrorInfraDatabase,
 				target: appLayer(),
 			},
 			wantErr: assert.NoError,
@@ -258,6 +281,80 @@ func TestWrapper(t *testing.T) {
 			err := Wrapper(tt.args.err, tt.args.target)
 			if tt.wantErr(t, err) {
 				assert.NotEmpty(t, fmt.Sprintf("%+v", err))
+			}
+		})
+	}
+}
+
+func TestAppendInto(t *testing.T) {
+	type args struct {
+		errWrapper   error
+		currentError []error
+		err          []error
+	}
+	tests := []struct {
+		name      string
+		args      args
+		wantError bool
+	}{
+		{
+			name: "expect nil",
+			args: args{
+				errWrapper:   nil,
+				currentError: nil,
+				err:          nil,
+			},
+			wantError: false,
+		},
+		{
+			name: "success appLayer & ErrorTestA + ErrorTestB",
+			args: args{
+				errWrapper:   appLayer(),
+				currentError: []error{ErrorApp},
+				err:          []error{ErrorTestA, ErrorTestB},
+			},
+			wantError: true,
+		},
+		{
+			name: "success appLayer & ErrorTestA",
+			args: args{
+				errWrapper:   appLayer(),
+				currentError: []error{ErrorApp},
+				err:          []error{ErrorTestA},
+			},
+			wantError: true,
+		},
+		{
+			name: "success ErrorTestA only",
+			args: args{
+				errWrapper:   nil,
+				currentError: nil,
+				err:          []error{ErrorTestA},
+			},
+			wantError: true,
+		},
+		{
+			name: "success infraDbLayer Redis & ErrorTestA + ErrorTestB",
+			args: args{
+				errWrapper:   infraDbLayer(REDIS),
+				currentError: []error{ErrorInfraDatabase, ErrorCommonNotFound, ErrorRedisDb},
+				err:          []error{ErrorTestA},
+			},
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AppendInto(tt.args.errWrapper, tt.args.err...)
+			if !tt.wantError {
+				assert.Nil(t, got)
+				return
+			}
+			for _, err := range tt.args.currentError {
+				assert.True(t, IsExact(got, err))
+			}
+			for _, err := range tt.args.err {
+				assert.True(t, IsExact(got, err))
 			}
 		})
 	}

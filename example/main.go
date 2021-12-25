@@ -7,10 +7,14 @@ import (
 )
 
 var (
-	ErrorInfra         = errorwrap.New("error infra layer")
-	ErrorInfraNotFound = errorwrap.New("error infra layer [not found]")
-	ErrorDomain        = errorwrap.New("error domain layer")
-	ErrorUseCase       = errorwrap.New("error usecase layer")
+	ErrorCommonNotFound = errorwrap.New("error not found")
+
+	ErrorInfraMysql = errorwrap.New("error infra mysql")
+	ErrorInfraRedis = errorwrap.New("error infra redis")
+
+	ErrorInfra   = errorwrap.New("error infra layer")
+	ErrorDomain  = errorwrap.New("error domain layer")
+	ErrorUseCase = errorwrap.New("error usecase layer")
 )
 
 func main() {
@@ -23,13 +27,15 @@ func main() {
 	fmt.Println()
 
 	switch {
-	case errorwrap.Is(err, ErrorInfra):
-		fmt.Println("is ErrorInfra")
-	case errorwrap.Is(err, ErrorInfraNotFound):
-		fmt.Println("is ErrorInfraNotFound") // go to this section
+	case errorwrap.Is(err, ErrorInfraRedis):
+		fmt.Println("is ErrorInfraRedis")
+	case errorwrap.Is(err, ErrorInfraMysql):
+		fmt.Println("is ErrorInfraMysql") // go to this section
 	}
 
-	if err := errorwrap.Wrapper(err, ErrorInfraNotFound); err != nil {
+	fmt.Println("is ErrorCommonNotFound", errorwrap.Is(err, ErrorCommonNotFound)) //true
+
+	if err := errorwrap.Wrapper(err, ErrorCommonNotFound); err != nil {
 		fmt.Printf("%+v\n", err)
 		fmt.Println("Print file stack trace")
 		fmt.Printf("%s\n", err.StackTrace())
@@ -39,11 +45,11 @@ func main() {
 		fmt.Printf("%+v\n", err.StackTrace())
 	}
 
-	fmt.Println(errorwrap.Is(err, ErrorDomain)) // true
+	fmt.Println("is ErrorDomain", errorwrap.Is(err, ErrorDomain)) // true
 
-	fmt.Println(errorwrap.Is(err, ErrorUseCase)) // true
+	fmt.Println("is ErrorUseCase", errorwrap.Is(err, ErrorUseCase)) // true
 
-	fmt.Printf("%+v\n", errorwrap.Wrapper(err, ErrorDomain).StackTrace()) // print stack trace until domain layer only
+	fmt.Printf("\nprint usecase stack trace%+v\n", errorwrap.Wrapper(err, ErrorUseCase).StackTrace()) // print stack trace until usecase layer only
 }
 
 func infraLayer(intType int) error {
@@ -56,23 +62,25 @@ func infraLayer(intType int) error {
 	case 2:
 		err := errors.New("resource not found")
 		if err != nil {
-			return errorwrap.Wrap(err, ErrorInfraNotFound)
+			return errorwrap.Wrap(err, ErrorCommonNotFound, ErrorInfra, ErrorInfraRedis)
 		}
 	case 3:
 		err := errors.New("another error")
 		if err != nil {
-			return errorwrap.NewErrorWithMessage(err, "using wrapper message")
+			return errorwrap.NewErrorWithMessage("using wrapper message", err)
 		}
 	case 4:
 		err := errors.New("error again")
 		if err != nil {
-			return errorwrap.WrapWithMessage(err, ErrorInfraNotFound, "unable to find resource in database")
+			return errorwrap.WrapWithMessage(err, "unable to find resource in database", ErrorInfra, ErrorCommonNotFound, ErrorInfraMysql)
 		}
 	case 5:
 		err := errors.New("just return it")
 		if err != nil {
 			return err
 		}
+	case 6:
+		return errorwrap.NewError(ErrorInfra)
 	}
 	return nil
 }
